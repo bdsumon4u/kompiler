@@ -2,94 +2,192 @@
 
 using namespace std;
 
+class Node
+{
+public:
+    char data;
+    Node *left, *right;
+
+    Node(char data)
+    {
+        this->data = data;
+        left = right = NULL;
+    }
+};
+
 // Syntax Tree
 class SyntaxTree
 {
-    map<string, string> prods = {
-        {"E+E", "E"},
-        {"E-E", "E"},
-        {"E*E", "E"},
-        {"E/E", "E"},
-        {"(E)", "E"},
-        {"a", "E"},
-        {"b", "E"},
-        {"c", "E"},
+    vector<pair<char, vector<string>>> prods = {
+        {'E', {"E+E", "E-E", "E*E", "E/E", "(E)", "a", "b", "c"}}
+        // {'E', {"E+T", "E-T", "T"}},
+        // {'T', {"T*F", "T/F", "F"}},
+        // {'F', {"(E)", "a", "b", "c"}},
     };
 
-    map<string, string> edges = {
-        {"E+E", "/|\\"},
-        {"E-E", "/|\\"},
-        {"E*E", "/|\\"},
-        {"E/E", "/|\\"},
-        {"(E)", "/|\\"},
-        {"a", "|"},
-        {"b", "|"},
-        {"c", "|"},
+    map<char, int> prec = {
+        {'+', 1},
+        {'-', 1},
+        {'*', 2},
+        {'/', 2},
+        {'^', 3},
     };
 
     string input;
-    string stack;
 
-    string ispace = "";
-    vector<string> tree;
+    stack<char> op;
+    string postfix = "";
 
-    bool reduce()
+    void precedence()
     {
-        string espace = "";
-        for (int i = 0; i < input.size(); i++)
+        if (prods.size() == 1)
         {
-            if (i)
-            {
-                espace += " ";
-            }
-
-            for (auto prod : prods)
-            {
-                if (input.substr(i, prod.first.size()) == prod.first)
-                {
-                    input.erase(i, prod.first.size());
-                    input.insert(i, prod.second);
-
-                    tree.push_back(espace + ispace + edges[prod.first]);
-
-                    if (prod.first.size() == 3)
-                    {
-                        ispace += " ";
-                    }
-
-                    tree.push_back(ispace + input);
-
-                    return true;
-                }
-            }
+            return;
         }
 
-        return false;
+        int p = 1;
+        for (auto &prod : prods)
+        {
+            for (string &body : prod.second)
+            {
+                if (body.size() == 3)
+                {
+                    if (!isalpha(body[1]))
+                    {
+                        prec[body[1]] = p;
+                    }
+                }
+            }
+            p++;
+        }
+    }
+
+    bool closingBracket(char c)
+    {
+        return !op.empty() && c == ')' && op.top() != '(';
+    }
+
+    bool stHasHighPrec(char c)
+    {
+        return !op.empty() && prec[op.top()] >= prec[c];
+    }
+
+    void shift()
+    {
+        char top = op.top();
+        if (top != '(')
+        {
+            postfix += top;
+        }
+        op.pop();
+    }
+
+    string inToPost(string infix)
+    {
+        postfix.clear();
+        for (char c : infix)
+        {
+            if (isalnum(c))
+            {
+                postfix += c;
+                continue;
+            }
+            if (c == '(')
+            {
+                op.push(c);
+                continue;
+            }
+            while (closingBracket(c) || stHasHighPrec(c))
+            {
+                shift();
+            }
+            if (c != ')')
+            {
+                op.push(c);
+            }
+        }
+        while (!op.empty())
+        {
+            shift();
+        }
+
+        return postfix;
     }
 
 public:
     SyntaxTree(string &input)
     {
-        this->tree = {input};
         this->input = input;
-        this->stack = "";
+
+        precedence();
+
+        inToPost(input);
+
+        generate();
     }
 
     void generate()
     {
-        while (input.size() > 1)
+        Node *root = new Node(postfix.back());
+        postfix.pop_back();
+        stack<Node *> st;
+        st.push(root);
+
+        while (!st.empty())
         {
-            if (!reduce())
+            auto top = st.top();
+
+            char back = postfix.back();
+            postfix.pop_back();
+
+            if (!top->right)
             {
-                cout << "Syntax Error" << endl;
-                return;
+                top->right = new Node(back);
+                if (!isalnum(back))
+                {
+                    st.push(top->right);
+                }
+                continue;
+            }
+            if (!top->left)
+            {
+                top->left = new Node(back);
+                st.pop();
+                if (!isalnum(back))
+                {
+                    st.push(top->left);
+                }
             }
         }
 
-        while (!tree.empty())
+        printTree(root);
+    }
+
+    void printTree(Node *root)
+    {
+        queue<Node *> q1, q2;
+        q1.push(root);
+
+        while (!q1.empty())
         {
-            cout << tree.back() << endl;
-            tree.pop_back();
+            auto front = q1.front();
+            q1.pop();
+
+            cout << front->data << " ";
+
+            if (front->left)
+            {
+                q2.push(front->left);
+            }
+            if (front->right)
+            {
+                q2.push(front->right);
+            }
+            if (q1.empty())
+            {
+                cout << endl;
+                swap(q1, q2);
+            }
         }
     }
 };
@@ -100,7 +198,6 @@ int main(int argc, char const *argv[])
     cin >> exp;
 
     SyntaxTree tree(exp);
-    tree.generate();
 
     return 0;
 }
